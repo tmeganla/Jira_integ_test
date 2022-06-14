@@ -73,7 +73,7 @@ pipeline {
                 script{      
                     def key = sh (
                         //script: '''echo $GITHUB_PR_TITLE|egrep -o  HELP-....''',
-                        script: '''echo $GITHUB_PR_TITLE|egrep -o -e \"QAT20-[0-9]+\" -e \"QATE-[0-9]+\" -e \"MQ9-[0-9]+\"''',
+                        script: '''echo $GITHUB_PR_TITLE|egrep -o -e \"QAT20-[0-9]+\" -e \"QATE-[0-9]+\" -e \"MQ9-[0-9]+\" -e \"HELP-[0-9]+\"''',
                         returnStdout: true
                     ).trim()
                     println key
