@@ -1,0 +1,113 @@
+def updatePRStatus(String status){
+    if (!env.GITHUB_PR_COND_REF) {
+        echo "manually triggered"
+        return;
+    }
+    try {
+        switch(status) {
+        case 'running':
+            script{
+                setGitHubPullRequestStatus(context: "PR Link in Jira", message: "[Jenkins] ${JOB_BASE_NAME} Build #${BUILD_NUMBER} - is pending", state: 'PENDING')
+            }
+            break
+        case 'success':
+            script{
+            //    githubPRComment comment: githubPRMessage('<h2>[Jenkins] ${JOB_NAME} </h2>Build: <a href=\'${BUILD_URL}\'>${BUILD_DISPLAY_NAME}</a> ended with <b>SUCCESS</b><br>'), statusVerifier: allowRunOnStatus('SUCCESS')
+                setGitHubPullRequestStatus(context: "PR Link in Jira", message: "[Jenkins] ${JOB_BASE_NAME} Build #${BUILD_NUMBER} - Success", state: 'SUCCESS')
+            }
+            break;
+        case 'failure':
+            script{
+            //    githubPRComment comment: githubPRMessage('<h2>[Jenkins] ${JOB_NAME} </h2>Build: <a href=\'${BUILD_URL}\'>${BUILD_DISPLAY_NAME}</a> ended with <b>FAILURE</b>')
+                setGitHubPullRequestStatus(context: "PR Link in Jira", message: "[Jenkins] ${JOB_BASE_NAME} Build #${BUILD_NUMBER} - Failed", state: 'FAILURE')
+
+            }
+            break;
+        case 'aborted':
+            script{
+            //    githubPRComment comment: githubPRMessage('<h2>[Jenkins] ${JOB_NAME} </h2>Build: <a href=\'${BUILD_URL}\'>${BUILD_DISPLAY_NAME}</a> was <b>ABORTED</b>')
+                setGitHubPullRequestStatus(context: "PR Link in Jira", message: "[Jenkins] ${JOB_BASE_NAME} Build #${BUILD_NUMBER} - Failed", state: 'ERROR')
+            }
+            break;
+        case 'unstable':
+            script{
+            //    githubPRComment comment: githubPRMessage('<h2>[Jenkins] ${JOB_NAME} </h2>Build: <a href=\'${BUILD_URL}\'>${BUILD_DISPLAY_NAME}</a> is <b>UNSTABLE</b><br/>')
+                setGitHubPullRequestStatus(context: "PR Link in Jira", message: "[Jenkins] ${JOB_BASE_NAME} Build #${BUILD_NUMBER} - Failed", state: 'FAILURE')
+            }
+            break;
+        default:
+            break;
+        }
+    } catch (Exception e) {
+            echo 'Exception occurred on Github PR request status ' + e.toString()
+    }
+}
+
+
+
+
+pipeline {
+    agent{
+        node {        label "LXP_SUSE12"
+        }
+    }
+    // environment {
+    //     http_proxy="http://proxy-ir.intel.com:912"
+    //     https_proxy="http://proxy-ir.intel.com:912"
+    //     no_proxy="localhost,127.0.0.1,intel.com,*.intel.com,*.intel.com.*,*jenkins*,*jenkins-agent*,*kubernetes.default"
+    // }
+    options {
+        timestamps()
+        timeout(time: 10, unit: 'MINUTES')
+        ansiColor('xterm')
+    }
+    stages{
+        stage("Add PR Link to Jira") {
+            steps{
+                println "===================================="
+                //println "Triggered by repo: " +GITHUB_REPOSITORY_NAME +" branch: " +GITHUB_REPOSITORY_BRANCH 
+                println "===================================="
+                //sh """
+                //env | grep -E "^GITHUB_"
+                ///"""
+                script{      
+                    def key = sh (
+                        //script: '''echo $GITHUB_PR_TITLE|egrep -o  HELP-....''',
+                        script: '''echo $GITHUB_PR_TITLE|egrep -o -e \"QAT20-[0-9]+\" -e \"QATE-[0-9]+\" -e \"MQ9-[0-9]+\"''',
+                        returnStdout: true
+                    ).trim()
+                    println key
+                    def pendingBuildName = "${env.JOB_NAME}"
+                    if (key){
+                    def remoteLink =  [globalId: "system=${GITHUB_PR_URL}",
+                        application: [type: "Pull Requests",
+                                 name: "Pull Requests"],
+                        relationship: "Pull Requests", object: [ icon: ["url16x16": "https://jenkins01.ir.intel.com/static/6e08bab7/plugin/github-pullrequest/git-pull-request.svg" , "title": "${GITHUB_PR_TITLE} ${GITHUB_PR_NUMBER}"], url: "${GITHUB_PR_URL}", title: " ${GITHUB_PR_TITLE} #${GITHUB_PR_NUMBER}"]]
+            
+                                                        //  withEnv(['JIRA_SITE=Jira01']) {
+                    def issueLink = jiraNewIssueRemoteLink idOrKey: key , remoteLink: remoteLink , site: 'Jira01'
+                        echo issueLink.data.toString()
+                }
+            }
+        }
+    }
+	}
+    post{
+        success{
+            script {
+                echo "========pipeline executed successfully ========"
+                updatePRStatus('success')
+            }
+        }
+        failure{
+            script {
+                echo "========pipeline execution failed========"
+                updatePRStatus('failure')
+            }
+
+        }
+        cleanup{
+            cleanWs()
+        }
+    } // end of post
+}
